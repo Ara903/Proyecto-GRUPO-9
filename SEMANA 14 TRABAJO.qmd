@@ -1,0 +1,357 @@
+---
+title: "PC4 SEMANA 14"
+format: html
+editor: visual
+---
+
+## CURSO: SISTEMATIZACION Y METODOS ESTADISTICOS
+
+INTEGRANTES:
+
+-Sánchez Gutiérrez Aracely Nathaly
+
+-Salvador Aybar Valle
+
+-César Augusto Aquije Hurtado
+
+-Danuska Ascarza Aiquipa
+
+## Cargar los paquetes
+
+```{r}
+install.packages("mice")
+install.packages("ggmice")
+```
+
+```{r}
+library(mice)
+library(tidyverse)
+library(here)
+library(rio)
+library(ggmice)
+library(gtsummary)
+```
+
+## 1 Datos perdidos en investigación en salud
+
+Es común encontrar datos faltantes en un conjunto de datos. Por ejemplo, al recolectar información a partir de historias clínicas de pacientes en un hospital, algunas variables pueden no estar disponibles porque no fueron medidas, anotadas o solicitadas por el personal de salud. En otro escenario, en estudios que utilizan encuestas, es posible que las personas encuestadas no respondan ciertas preguntas o que las respuestas sean ininteligibles.
+
+Cuando se aplican métodos de regresión en investigaciones en ciencias de la salud, la práctica habitual consiste en eliminar las observaciones que contienen datos faltantes. Esta técnica se conoce como análisis de casos completos, y muchos paquetes estadísticos la implementan por defecto.
+
+## 2 Imputación de datos
+
+Siempre es preferible utilizar todas las observaciones en un análisis de regresión, ya que esto permite obtener estimaciones más precisas y cercanas a la realidad. En esta sesión, aplicaremos una técnica llamada imputación, que consiste en reemplazar los datos perdidos con una estimación de su valor verdadero.
+
+Esta no es una técnica reciente. Enfoques anteriores de imputación —como, por ejemplo, reemplazar los valores perdidos con el promedio de la variable— han sido ampliamente utilizados, pero presentan limitaciones. Estas limitaciones han sido superadas por una técnica más moderna y actualmente muy popular: la imputación múltiple de datos.
+
+## 3 El dataset para este ejercicio
+
+Para ilustrar el proceso de imputación múltiple de datos, utilizaremos el conjunto de datos data_diabetes. Este dataset incluye información de 768 pacientes adultos. Las variables registradas comprenden el número de embarazos, el nivel de glucosa en sangre 2 horas después de una carga de glucosa (mg/dL), la presión arterial diastólica (mm Hg), el grosor del pliegue cutáneo del tríceps (mm), el nivel de insulina a las 2 horas (mu U/ml), el índice de masa corporal (IMC), el antecedente familiar de diabetes (función de historial familiar), la edad (en años) y el diagnóstico de diabetes a 5 años (positivo o negativo). Algunos participantes presentan valores faltantes en al menos una de estas variables.
+
+Cargando los datos
+
+```{r}
+data_sm <- import(here("data", "diabetes.csv"))
+```
+
+Un vistazo a los datos
+
+```{r}
+head(data_sm)
+```
+
+## 4 Realizando la imputación de datos
+
+### 4.1 ¿Donde estan los valores perdidos?
+
+Es importante saber en qué variables se encuentran los datos antes de iniciar la inputación. Una forma rápida es usando la función `colSums()` es `is.na()`.
+
+```{r}
+colSums(is.na(data_sm))
+```
+
+***INTERPRETACION:***
+
+Esto mostrará cuántos valores faltantes hay por variable. En este dataset, algunas variables como insulina_2h y pliegue_triceps presentan una gran cantidad de valores perdidos, lo que puede afectar los modelos de imputación. Esta información es clave para decidir si imputamos, transformamos o excluimos alguna variable en el análisis posterior.
+
+Incluso mejor, podemos visualizar los datos perdidos en un mapa de calor usando la función `plot_pattern()` de **ggmice**.
+
+```{r}
+data_sm |>
+  select(
+    num_embarazos,
+    glucosa_2h,
+    presion_sanguinea,
+    pliegue_triceps,
+    insulina_2h,
+    imc,
+    historial_diabetes,
+    edad,
+    diabetes_5a
+  ) |>
+  ggmice::plot_pattern(
+    square = TRUE,
+    rotate = TRUE
+  )
+```
+
+***INTERPRETACION:***
+
+El número total de valores perdidos en el dataset data_sm es de 652. Las variables insulina_2h, pliegue_triceps, presion_sanguinea, glucosa_2h e imc tienen 374, 227, 35, 5 y 11 valores perdidos, respectivamente. La variable con mayor proporción de datos ausentes es insulina_2h, seguida de pliegue_triceps. El gráfico también muestra que hay patrones repetidos de ausencia simultánea, destacando que 278 pacientes presentan datos faltantes únicamente en insulina_2h, mientras que otros presentan combinaciones múltiples de variables incompletas.
+
+### 4.2 Comparación de participantes con y sin valores perdidos
+
+Una buena práctica antes de iniciar la imputación de datos es también evaluar cómo difieren los valores de las otras variables entre el grupo de participantes con valores perdidos y el grupo sin valores perdidos. Esto es importante debido a que puede darnos pistas de si en realidad es necesaria la imputación o, dicho de otra forma, si es seguro usar el análisis de casos completos. ¿Cómo? Si la distribución de las otras variables no difiere entre el grupo con valores perdidos y el grupo sin valores perdidos, entonces no es necesario la imputación de datos. Evaluemos esto en nuestro dataset para las variables insulina_2h y pliegue_triceps.
+
+```{r}
+tabla_insulina <- data_sm |>
+  dplyr::select(
+    num_embarazos,
+    glucosa_2h,
+    presion_sanguinea,
+    pliegue_triceps,
+    insulina_2h,   
+    imc,
+    historial_diabetes,
+    edad,
+    diabetes_5a
+  ) |>
+  mutate(missing = factor(
+    is.na(insulina_2h),
+    levels = c(FALSE, TRUE),
+    labels = c("Sin valores perdidos", "Con valores perdidos")
+  )) |>
+  tbl_summary(
+    by = missing,
+    statistic = list(
+      all_continuous() ~ "{mean} ({sd})",
+      all_categorical() ~ "{n} ({p}%)"
+    )
+  ) |>
+  modify_header(label = "**Variable**",
+                all_stat_cols() ~ "**{level}**<br>N = {n} ({style_percent(p, digits = 1)}%)") |>
+  modify_caption("Características de los participantes según valor perdido en **insulina_2h**") |>
+  bold_labels()
+tabla_triceps <- data_sm |>
+  dplyr::select(
+    num_embarazos,
+    glucosa_2h,
+    presion_sanguinea,
+    pliegue_triceps,       
+    imc,
+    historial_diabetes,
+    edad,
+    diabetes_5a
+  ) |>
+  mutate(missing = factor(
+    is.na(pliegue_triceps),
+    levels = c(FALSE, TRUE),
+    labels = c("Sin valores perdidos", "Con valores perdidos")
+  )) |>
+  tbl_summary(
+    by = missing,
+    statistic = list(
+      all_continuous() ~ "{mean} ({sd})",
+      all_categorical() ~ "{n} ({p}%)"
+    )
+  ) |>
+  modify_header(label = "**Variable**",
+                all_stat_cols() ~ "**{level}**<br>N = {n} ({style_percent(p, digits = 1)}%)") |>
+  modify_caption("Características de los participantes según valor perdido en **pliegue_triceps**") |>
+  bold_labels()
+
+tabla_comparativa <- tbl_merge(
+  tbls = list(tabla_insulina, tabla_triceps),
+  tab_spanner = c("**Insulina 2h**", "**Pliegue Tríceps**")
+)
+
+tabla_comparativa
+```
+
+***INTERPRETACION:***
+
+Se compararon las características clínicas y demográficas de los participantes en función de la presencia de valores perdidos en las variables insulina_2h y pliegue_triceps. Esta comparación permite evaluar si la ausencia de datos está relacionada con otras variables relevantes, lo cual es fundamental para decidir si es necesario realizar imputaciones o si sería válido utilizar un análisis por casos completos.
+
+En el caso de la variable insulina_2h, se observó que 374 participantes (48.7%) presentaban valores perdidos. Los individuos con datos ausentes en esta variable tendían a ser de mayor edad, con un promedio de 36 años, en comparación con 31 años en el grupo sin datos faltantes. Asimismo, mostraban un valor promedio más bajo en la variable historial_diabetes 0.42 frente a un 0.53, un IMC levemente inferior (32 frente a 33), y una mayor proporción de diagnóstico positivo de diabetes a cinco años (37% frente a 33%).
+
+Respecto a la variable pliegue_triceps, 227 participantes (29.6%) tenían valores perdidos. Este grupo también mostró un promedio de edad más alto (37 años frente a 32) y un valor menor tanto en IMC (31 frente a 33) como en historial de diabetes familiar (0.39 frente a 0.50). La proporción de casos positivos de diabetes a cinco años fue ligeramente mayor en el grupo con datos ausentes (39%) en comparación con el grupo sin datos faltantes (33%).
+
+Estos resultados sugieren que la falta de datos no ocurre de manera completamente aleatoria, sino que está asociada a características clínicas relevantes. Por ello, se justifica la aplicación de métodos de imputación múltiple para completar los valores faltantes y evitar sesgos en los análisis posteriores.
+
+### 4.3 ¿Qué variables debo incluir en el proceso de imputación?
+
+Debemos incluir todas las variables que se utilizarán en los análisis posteriores, incluso aquellas que no presentan valores perdidos. La razón es que el modelo de imputación debe ser tan complejo como el análisis que se realizará posteriormente. De lo contrario, se perderá información relevante de las demás variables. Además, aunque algunas variables no tengan valores faltantes, su inclusión en el modelo de imputación es útil porque aportan información que mejora la estimación de los valores imputados. Recuerda además que las variables categóricas deben ser de tipo factor. El código de abajo selecciona las variables que se utilizarán en el modelo y transforma la variable `diabetes_5a` a factor.
+
+```{r}
+input_data <-
+  data_sm |>
+  dplyr::select(
+    num_embarazos,
+    glucosa_2h,
+    presion_sanguinea,
+    pliegue_triceps,
+    insulina_2h,
+    imc,
+    historial_diabetes,
+    edad,
+    diabetes_5a
+  ) |>
+  mutate(diabetes_5a = as.factor(diabetes_5a))
+```
+
+***INTERPRETACION:***
+
+Para imputar datos utilizaremos la función mice() del paquete del mismo nombre. Entre sus argumentos, debemos especificar:
+
+-    el número de imputaciones con m,
+
+-   una semilla (seed) para que los resultados sean reproducibles, y
+
+-   el método de imputación con method.
+
+Con respecto a este último argumento, emplearemos el método "pmm" para variables continuas y "logreg" para variables binarias. Para las variables que no presentan valores perdidos, simplemente se colocan comillas vacías ("").
+
+Cabe recalcar que el conjunto de datos contiene 9 variables, de las cuales 5 presentan valores perdidos (glucosa_2h, presion_sanguinea, pliegue_triceps, insulina_2h e imc), y las variables se encuentran en el siguiente orden.
+
+```{r}
+names(input_data)
+```
+
+El método de imputación la indicaremos con el argumento `method` en el mismo orden que aparecen las variables en el dataset.
+
+```{r}
+data_imputada <-
+  mice(
+    input_data,
+    m = 20,
+    method = c(
+      "",
+      "pmm",
+      "pmm",
+      "pmm",
+      "pmm",
+      "pmm",
+      "",
+      "",
+      "logreg"
+    ),
+    maxit = 20,
+    seed = 3,
+    print = FALSE
+  )
+```
+
+```{r}
+data_imputada
+```
+
+***INTERPRETACION:***
+
+El PredictorMatrix que se muestra debajo indica qué variables fueron utilizadas como predictores para imputar cada una de las variables con datos faltantes. En esta matriz:
+
+El valor 1 indica que la variable correspondiente fue utilizada como predictor.
+
+El valor 0 indica que no fue utilizada como predictor.
+
+Por ejemplo:
+
+Para imputar glucosa_2h, se usaron como predictores: num_embarazos, presion_sanguinea, pliegue_triceps, insulina_2h, imc, historial_diabetes, edad y diabetes_5a.
+
+En cambio, presion_sanguinea no utilizó glucosa_2h como predictor (probablemente porque glucosa_2h también tiene datos faltantes), pero sí el resto de variables
+
+Este diseño permite que la imputación se base en relaciones multivariadas entre las variables, mejorando la estimación de los valores perdidos y conservando la estructura del conjunto de datos original.
+
+## 5 Analizando los datos imputados
+
+Antes de realizar análisis adicionales al dataset imputado, es necesario explorar los datos imputados. Idealmente, los valores imputados deben ser plausibles en comparación con los valores observados. Podemos observar esto en un gráfico de cajas y bigotes de la distribución de los datos imputados (20) versus los datos sin imputar.
+
+Para la variable Pliegue Tríceps
+
+```{r}
+ggmice(data_imputada, aes(x = .imp, y = pliegue_triceps)) +
+  geom_jitter(height = 0, width = 0.25) +
+  geom_boxplot(width = 0.5, size = 1, alpha = 0.55, outlier.shape = NA) +
+  labs(x = "Imputation number")
+```
+
+***INTERPRETACION:***
+
+El gráfico muestra la distribución de los valores imputados de la variable `pliegue_triceps` a lo largo de las 20 imputaciones generadas por el algoritmo `mice`. En el eje vertical se encuentra el valor de `pliegue_triceps` y en el eje horizontal se indica el número de imputación. Los puntos en azul representan los valores observados (no faltantes), mientras que los puntos en rosa corresponden a los valores imputados en cada conjunto.
+
+Se observa que los valores imputados siguen una distribución similar a la de los datos observados. Aunque los datos reales presentan algunos valores extremos (outliers) por encima de 75 mm, los datos imputados se concentran mayormente entre 15 y 45 mm, reproduciendo adecuadamente la variabilidad central del conjunto. Esto sugiere que la imputación ha sido razonable y no ha introducido distorsiones graves en la variable.
+
+Para la variable Insulina a las 2 horas
+
+```{r}
+ggmice(data_imputada, aes(x = .imp, y = insulina_2h)) +
+  geom_jitter(height = 0, width = 0.25) +
+  geom_boxplot(width = 0.5, size = 1, alpha = 0.55, outlier.shape = NA) +
+  labs(x = "Imputation number")
+```
+
+***INTERPRETACION:***
+
+El gráfico muestra la distribución de los valores imputados de la variable `insulina_2h` en las 20 imputaciones generadas. Los puntos en azul representan los valores observados (originales), mientras que los puntos en rosa corresponden a los valores imputados en cada conjunto.
+
+Visualmente se observa que los valores imputados mantienen una estructura de distribución similar a la de los valores originales. Los valores observados de `insulina_2h` presentan una gran dispersión, con varios casos extremos por encima de 300 e incluso superiores a 600. Los datos imputados reproducen esta dispersión con un patrón consistente a través de las 20 imputaciones, incluyendo una adecuada cantidad de valores extremos y variabilidad vertical. Esto indica que el modelo ha capturado correctamente la heterogeneidad y asimetría natural de esta variable.
+
+Para datos categóricos, podemos crear una tabla de dos entradas comparando la distribución de la variable con datos completos e incompletos. Esto requiere primero crear la versión "long" de la data imputada.
+
+```{r}
+data_imputada_l <- complete(data_imputada, "long", include = TRUE)
+```
+
+Ahora la tabla.
+
+```{r}
+data_imputada_l <- data_imputada_l %>%
+  mutate(imputed = .imp > 0,
+         imputed = factor(imputed,
+                          levels = c(FALSE, TRUE),
+                          labels = c("Observado", "Imputado")))
+prop.table(table(data_imputada_l$diabetes_5a, data_imputada_l$imputed), margin = 2)
+```
+
+***INTERPRETACION:***
+
+La tabla muestra la proporción de cada categoría de la variable diabetes_5a entre los datos observados e imputados. Se observa que el 65.1% de los datos observados corresponden a participantes clasificados como negativo y el 34.9% como positivo. Estas mismas proporciones se repiten exactamente en los datos imputados: 65.1% negativo y 34.9% positivo.
+
+Este resultado es altamente favorable. La igualdad exacta en las proporciones indica que el proceso de imputación preservó perfectamente la estructura original de la variable categórica, sin introducir sesgos artificiales. Es decir, la imputación no alteró la relación entre los grupos con y sin diabetes a 5 años, lo que permite confiar en los análisis posteriores que utilicen esta variable.
+
+### 5.1 Procedimientos adicionales luego de la imputación
+
+El procedimiento estándar para realizar un análisis de regresión después de la imputación consiste en utilizar la función with() para ajustar el modelo de regresión al objeto mids (por ejemplo, data_imputada). Posteriormente, se emplea la función pool() para obtener los resultados combinados, como se suele presentar en la sección de resultados.
+
+No obstante, si se hace uso del paquete gtsummary, este y sus funciones manejan internamente el agrupamiento de las imputaciones, por lo que solo es necesario utilizar la función with(). A continuación, se muestra un ejemplo de regresión logística multivariada con los datos imputados, tal como lo realizaste anteriormente.
+
+Recuerda que es posible realizar cualquier tipo de análisis de regresión o (con procedimientos adicionales) pruebas inferenciales a partir de los datos imputados.
+
+```{r}
+tabla_multi <- 
+  data_imputada |>
+  with(glm(diabetes_5a ~ edad + num_embarazos + presion_sanguinea +
+             pliegue_triceps + insulina_2h + imc + historial_diabetes,
+           family = binomial(link = "logit"))) |>
+  tbl_regression(
+    exponentiate = TRUE,
+    label = list(
+      edad ~ "Edad (años)",
+      num_embarazos ~ "N° de embarazos",
+      presion_sanguinea ~ "Presión arterial (mm Hg)",
+      pliegue_triceps ~ "Pliegue triceps (mm)",
+      insulina_2h ~ "Insulina a las 2h (mu U/ml)",
+      imc ~ "Índice de Masa Corporal",
+      historial_diabetes ~ "Historial de diabetes"
+    )
+  ) |>
+  bold_p(t = 0.05) |>
+  modify_header(estimate = "**OR ajustado**", p.value = "**p valor**")
+```
+
+```{r}
+tabla_multi
+```
+
+***INTERPRETACION:***
+
+Los resultados del modelo de regresión muestran que ciertos factores están claramente relacionados con el desarrollo de diabetes a cinco años. Las personas con mayor edad, más embarazos previos y un índice de masa corporal más alto presentan mayor riesgo, lo cual era esperable y coincide con lo que se ha observado en otros estudios. El historial de diabetes en la familia destaca como el factor más fuerte: quienes lo tienen duplican sus probabilidades de desarrollar la enfermedad. También se encontró una asociación significativa con los niveles de insulina a las 2 horas, aunque con un efecto más sutil. En cambio, variables como la presión arterial y el pliegue del tríceps no mostraron una relación clara en este análisis. En conjunto, estos resultados reflejan patrones clínicos consistentes y confirman que, gracias al proceso de imputación múltiple, fue posible incluir toda la información disponible para llegar a conclusiones más completas y confiables.
