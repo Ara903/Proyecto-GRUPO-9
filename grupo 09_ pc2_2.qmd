@@ -1,0 +1,100 @@
+---
+title: "PC2_02"
+format: html
+editor: visual
+---
+
+## ACTIVIDAD PC2_01
+
+```{r}
+library(rio)
+library(here)
+```
+
+```{r}
+data_diabetes <- import(here("data", "diabetes.csv"))
+```
+
+**#Para la variable presion_sanguinea**
+
+```{r}
+shapiro.test(data_diabetes$presion_sanguinea)
+```
+
+INTERPRETACIÓN:
+
+Estadístico de prueba (W): 0.99031
+
+Valor_p = 0.0000945
+
+CONCLUSIÓN:\
+Valor_p = 0.0000945 \< 0.05 → "Se rechaza la hipótesis nula", entonces se acepta la hipótesis alterna (H1). Por lo tanto, los datos de la presión sanguínea "NO SIGUEN UNA DISTRIBUCIÓN NORMAL".
+
+**#Para la variable num_embarazos**
+
+```{r}
+shapiro.test(data_diabetes$num_embarazos)
+```
+
+INTERPRETACIÓN:
+
+Estadístico de prueba (W): 0.90428
+
+Valor_p = 0.00000000000000022
+
+CONCLUSIÓN:\
+Valor_p = 0.00000000000000022 \< 0.05 → "Se rechaza la hipótesis nula", entonces se acepta la hipótesis alterna (H1). Por lo tanto, los datos del numero de embarazos "NO SIGUEN UNA DISTRIBUCIÓN NORMAL".
+
+**#Para la variable gluc_2h**
+
+```{r}
+shapiro.test(data_diabetes$glucosa_2h)
+```
+
+INTERPRETACIÓN:
+
+Estadístico de prueba (W): 0.90428
+
+Valor_p = 0.0000000000172
+
+CONCLUSIÓN:\
+Valor_p = 0.0000000000172 \< 0.05 → "Se rechaza la hipótesis nula", entonces se acepta la hipótesis alterna (H1). Por lo tanto, los datos de glucosa en 2 horas "NO SIGUEN UNA DISTRIBUCIÓN NORMAL".
+
+**#Para la variable pliegue_tricep**
+
+```{r}
+shapiro.test(data_diabetes$pliegue_triceps)
+```
+
+INTERPRETACIÓN:
+
+Estadístico de prueba (W): 0.968
+
+Valor_p = 0.000000001776
+
+CONCLUSIÓN:\
+Valor_p = 0.000000001776 \< 0.05 → "Se rechaza la hipótesis nula", entonces se acepta la hipótesis alterna (H1). Por lo tanto, los datos de la variable pliegue triceps "NO SIGUEN UNA DISTRIBUCIÓN NORMAL".
+
+VARIABLE CATEGORICA
+
+**#Para la variable diabetes_5a**
+
+DOI: 10.23913/rics.v7i14.72
+
+```{r}
+table(data_diabetes$diabetes_5a)
+```
+
+```{r}
+chisq.test(x = c(268, 500), p = c(0.1818, 0.8182))
+```
+
+INTERPRETACION
+
+Prevalencia es de 18.18 para llegar a ( 1- 0.1818 = 0.8182)
+
+Chi cuadrado = 144.27
+
+Grados de libertad (df): 1 Valor p: \< 2.2e-16
+
+El valor p es menor que α = 0.05, lo que proporciona evidencia estadísticamente significativa para rechazar la hipótesis nula.
