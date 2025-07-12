@@ -1,0 +1,415 @@
+---
+title: "semana 12 trabajo"
+format: html
+editor: visual
+---
+
+CURSO: SISTEMATIZACION Y METODOS ESTADISTICOS
+
+INTEGRANTES:
+
+-Sánchez Gutiérrez Aracely Nathaly
+
+-Salvador Aybar Valle
+
+-César Augusto Aquije Hurtado
+
+-Danuska Ascarza Aiquipa
+
+## Cargar los paquetes
+
+```{r}
+install.packages("performance")
+```
+
+```{r}
+library(tidyverse)
+library(here)
+library(rio)
+library(gtsummary)
+library(car)
+library(survival)
+library(performance)
+```
+
+## 1 Modelos univariados (no ajustados) vs. multivariados (ajustados)
+
+Hasta ahora, hemos explorado modelos de regresión que evalúan un predictor a la vez. A estos se les denomina modelos univariados o no ajustados, ya que solo consideran una variable predictora. Sin embargo, datasets utilizados en estas sesiones, al igual que muchos datos que probablemente recolectes, provienen de estudios observacionales. Es decir, no existe un control estricto sobre qué individuos se incluyen en el análisis y cuáles no. Esto implica que múltiples factores pueden influir en el desenlace de interés de manera simultánea.
+
+Por esta razón, no es adecuado extraer conclusiones definitivas a partir de modelos no ajustados, ya que estos ignoran el efecto de posibles variables de confusión. En su lugar, es necesario realizar un análisis multivariado o ajustado, que permita considerar de manera simultánea varios predictores potenciales.
+
+Por ejemplo, es poco probable que solo el tipo de accidente cerebrovascular (ACV) —isquémico o hemorrágico— determine la probabilidad de fallecer tras un evento de este tipo. Factores como la edad, el sexo, las comorbilidades preexistentes y los hábitos de vida también pueden afectar de manera importante este riesgo. Ignorar estas variables podría conducir a estimaciones sesgadas o erróneas.
+
+## 1.1 Interpretación general del modelo ajustado
+
+Cuando se incluyen varias covariables en un modelo de regresión, se obtienen medidas de efecto ajustadas, como el Odds Ratio ajustado (OR ajustado) en la regresión logística, o el riesgo relativo ajustado (RR ajustado) en la regresión de Cox. Estas medidas estiman la asociación entre una variable específica y el desenlace de interés, mientras se controla el efecto de las demás covariables incluidas en el modelo.
+
+Por ejemplo, el OR ajustado para fallecer tras un ACV isquémico indica la fuerza de esta asociación independientemente de otros factores como la edad, el sexo o las comorbilidades del paciente.
+
+En esta sesión aplicaremos tanto modelos univariados (no ajustados) como multivariados (ajustados), utilizando el dataset previamente analizados en sesión de regresión logística.
+
+## 1.2 Selección de variables para el modelo multivariado (ajustado)
+
+La selección de variables consiste en decidir cuáles variables incluir en un modelo a partir de una lista completa de predictores disponibles, eliminando aquellas que son irrelevantes o redundantes. El objetivo es construir un modelo que explique adecuadamente el desenlace y permita realizar predicciones precisas sin sobreajustar los datos.
+
+Existen al menos dos enfoques principales para la selección de variables:
+
+### **1.2.1 Selección automática**
+
+Este método emplea algoritmos automáticos —disponibles en R— para determinar qué variables incluir en el modelo. Las técnicas automáticas de selección se basan en criterios estadísticos como los valores p o los coeficientes de regresión. Los algoritmos difieren principalmente en la estrategia que utilizan para evaluar la inclusión o exclusión de variables en el modelo final.
+
+Dependiendo de la dirección del algoritmo (forward, backward o stepwise), el resultado será un subconjunto seleccionado de variables. Para comparar entre distintos modelos generados por estos algoritmos, puede utilizarse el Criterio de Información de Akaike (Akaike Information Criterion, AIC), que estima el error de predicción y, por tanto, la calidad relativa de los modelos estadísticos para un conjunto de datos dado. En términos simples, cuanto menor sea el valor del AIC, mejor es el modelo en términos de equilibrio entre ajuste y complejidad.
+
+Hay al menos tres algoritmos de selección automática de variables:
+
+1.  Eliminación hacia atrás (*Backward elimination*),
+
+2.  Selección hacia adelante (*Forward selection*) y
+
+3.  Selección paso a paso (*Stepwise selection*).
+
+Cada uno de estos métodos tiene ventajas y limitaciones. Entre ellos, la selección paso a paso es una técnica ampliamente utilizada en investigaciones en ciencias de la salud, ya que combina procedimientos de selección hacia adelante y hacia atrás. Esto permite añadir o eliminar variables de manera iterativa en función de criterios estadísticos, optimizando el modelo en ambos sentidos.
+
+Sin embargo, la selección automática de variables no debería realizarse de manera aislada; es recomendable complementarla con una evaluación de la multicolinealidad. La multicolinealidad ocurre cuando dos o más variables independientes están altamente correlacionadas, lo que puede distorsionar las estimaciones del modelo. Por ejemplo, no es apropiado incluir simultáneamente el recuento total de leucocitos y el recuento de neutrófilos, dado que ambas variables están estrechamente relacionadas; en estos casos, es preferible seleccionar solo una de ellas.
+
+En regresión, una herramienta común para detectar multicolinealidad es el Factor de Inflación de la Varianza (VIF, por sus siglas en inglés). De manera general, se interpreta así:
+
+-   VIF de 1 indica que no hay multicolinealidad.
+-   VIF entre 1 y 5 sugiere una multicolinealidad moderada.
+-   VIF superior a 5 o 10 indica una multicolinealidad alta que puede requerir atención.
+
+### **1.2.2 Selección intencionada de variables**
+
+La selección intencionada de variables sigue una serie de pasos que combinan criterios estadísticos y consideraciones clínicas. Estos pasos incluyen:
+
+-   Evaluación univariada de variables: Se realiza un análisis univariado para cada variable independiente con respecto a la variable de desenlace. Las variables que presentan una asociación estadísticamente significativa (habitualmente con un valor de p menor a 0.20) o que son consideradas clínicamente relevantes se seleccionan para su inclusión inicial en el modelo multivariado, independientemente de su significancia estadística.
+
+-   Comparación de modelos multivariados: Las variables seleccionadas se incluyen en un modelo multivariado preliminar. A partir de este modelo, las variables que no alcanzan un nivel de significancia estadística estricto (por ejemplo, p \> 0.05) pueden ser consideradas para eliminación. Posteriormente, se comparan el modelo original (con todas las variables) y el modelo reducido (con las variables eliminadas) para evaluar si la simplificación del modelo afecta negativamente su capacidad explicativa o predictiva. Esta comparación puede realizarse mediante pruebas como la de razón de verosimilitud (Likelihood Ratio Test) o criterios de información (AIC/BIC).
+
+-   Evaluación de interacciones: Es importante explorar posibles términos de interacción entre variables que, en combinación, podrían modificar el efecto sobre el desenlace.
+
+## 2. Ejemplos de análisis univariado y multivariado en una regresión logística
+
+### 2.1 El dataset para este ejercicio
+
+Para ilustrar el proceso de análisis multivariado en un modelo de regresión logística, se empleará el dataset `diabetes`. Este conjunto de datos incluye información de 768 personas evaluadas para riesgo de diabetes. Las variables registradas comprenden el diagnóstico de diabetes a 5 años (positivo o negativo), el número de embarazos, la concentración de glucosa en sangre a las 2 horas, la presión sanguínea, el pliegue cutáneo tricipital, los niveles de insulina a las 2 horas, el índice de masa corporal (IMC), el historial hereditario de diabetes, y la edad, entre otras variables de relevancia clínica.
+
+```{r}
+diabetes_data <- import(here("data", "diabetes.csv"))
+```
+
+Un vistazo a los datos
+
+```{r}
+head(diabetes_data)
+```
+
+### 2.2 El análisis univariado
+
+En esta sección se estimarán los Odds Ratios (OR) de cada variable de manera independiente, es decir, sin ajuste por otras covariables.
+
+Antes de realizar este análisis, es necesario definir las categorías de referencia para las variables categóricas mediante la función `mutate()` en combinación con `relevel()`. Este paso asegura que la interpretación de los OR se haga en relación con la categoría de referencia seleccionada. El resultado se guarda en un nuevo objeto llamado diabetes_data_1
+
+```{r}
+diabetes_data_1 <- diabetes_data |>
+  mutate(
+    diabetes_5a = relevel(as.factor(diabetes_5a), ref = "negativo")
+  ) |>
+  na.omit()
+```
+
+```{r}
+tabla_reg_log_univ <- diabetes_data_1 |>
+  tbl_uvregression(
+    include = c(num_embarazos, glucosa_2h, presion_sanguinea, 
+                pliegue_triceps, insulina_2h, imc, historial_diabetes, edad),
+    y = diabetes_5a,
+    method = glm,
+    method.args = list(family = binomial),
+    exponentiate = TRUE,
+    conf.int = TRUE,
+    hide_n = TRUE,
+    add_estimate_to_reference_rows = FALSE,
+    pvalue_fun = ~ style_pvalue(.x, digits = 3),
+    estimate_fun = ~ style_number(.x, digits = 2),
+    label = list(
+      num_embarazos ~ "Número de embarazos",
+      glucosa_2h ~ "Glucosa a las 2h (mg/dL)",
+      presion_sanguinea ~ "Presión sanguínea (mmHg)",
+      pliegue_triceps ~ "Pliegue tricipital (mm)",
+      insulina_2h ~ "Insulina a las 2h (mU/mL)",
+      imc ~ "Índice de masa corporal (IMC)",
+      historial_diabetes ~ "Historial de diabetes familiar",
+      edad ~ "Edad (años)"
+    )
+  ) |>
+  bold_labels() |>
+  bold_p(t = 0.05) |>
+  modify_header(estimate = "**OR no ajustado**", p.value = "**Valor P**")
+```
+
+En esta tabla, los resultados se expresan como odds ratios no ajustados (OR) con sus respectivos intervalos de confianza al 95% y valores p.
+
+```{r}
+tabla_reg_log_univ
+```
+
+**¿Cómo interpretar?**
+
+En cuanto a las variables numéricas, se observa que todas presentan un OR mayor a 1, lo que sugiere una posible asociación positiva con el desenlace (diagnóstico positivo de diabetes a 5 años). Sin embargo, todas las variables analizadas mostraron una asociación estadísticamente significativa (valor p \< 0.05).
+
+Específicamente:
+
+Por cada embarazo adicional, las probabilidades (odds) de desarrollar diabetes a 5 años se incrementan en un 18% (OR = 1.18; IC95%: 1.11–1.27; p \< 0.001).
+
+Por cada aumento de 1 mg/dL en los niveles de glucosa a las 2 horas, las odds de diabetes aumentan en un 4% (OR = 1.04; IC95%: 1.03–1.05; p \< 0.001).
+
+Por cada mmHg adicional en la presión sanguínea, las odds aumentan en un 4% (OR = 1.04; IC95%: 1.02–1.05; p \< 0.001).
+
+Por cada mm adicional en el pliegue tricipital, las odds aumentan en un 6% (OR = 1.06; IC95%: 1.03–1.08; p \< 0.001).
+
+Por cada unidad adicional en la insulina a las 2 horas, las odds aumentan en un 1% (OR = 1.01; IC95%: 1.00–1.01; p \< 0.001).
+
+Por cada incremento en una unidad del IMC, las odds aumentan en un 9% (OR = 1.09; IC95%: 1.06–1.13; p \< 0.001).
+
+Aquellos con mayor carga hereditaria de diabetes (historial familiar) presentan un riesgo muy elevado: las odds aumentan más de 3 veces (OR = 3.60; IC95%: 1.93–7.02; p \< 0.001).
+
+Finalmente, por cada año adicional de edad, las odds de desarrollar diabetes a 5 años aumentan en un 8% (OR = 1.08; IC95%: 1.05–1.10; p \< 0.001).
+
+### 2.3 El análisis multivariado
+
+Para el análisis de regresión logística multivariada, se aplicó una estrategia de selección automática de variables utilizando tres enfoques: eliminación hacia atrás (*backward elimination*), selección hacia adelante (*forward selection*) y selección paso a paso (*stepwise selection)*.
+
+**Paso 1. Ajuste del modelo inicial**
+
+Ajustamos un modelo de regresión logística binaria que incluya todas las variables candidatas
+
+```{r}
+var_modelo <- glm(
+  diabetes_5a ~ num_embarazos + glucosa_2h + presion_sanguinea + 
+    pliegue_triceps + insulina_2h + imc + historial_diabetes + edad,
+  data = diabetes_data_1,
+  family = binomial(link = "logit")
+)
+```
+
+**Paso 2a. Realizamos la selección de variables** usando la técnica Eliminación hacia atrás (Backward elimination).
+
+```{r}
+multi_backward <- var_modelo |>
+  step(direction = "backward", trace = FALSE)
+```
+
+**Paso 2b. Realizamos la selección de variables** usando la técnica Selección hacia adelante (Forward selection).
+
+```{r}
+multi_forward <- var_modelo |>
+  step(direction = "forward", trace = FALSE)
+```
+
+**Paso 3c. Realizamos la selección de variables** usando la técnica Selección paso a paso (Stepwise selection).
+
+```{r}
+multi_stepwise <- var_modelo |>
+  step(direction = "both", trace = FALSE)
+```
+
+Los resultados de la selección de las variables para el modelo se han guardado en los objetos: multi_backward, multi_forward, y multi_stepwise. El siguiente paso es comparar los valores de AIC y la multicolinealidad entre las variables seleccionadas por cada uno de los modelos.
+
+**Paso 3. Estimados el AIC para los modelos.**
+
+Podemos visualizar el AIC y cuáles variables han sido seleccionadas en cada modelo, usando la función summary.
+
+```{r}
+summary(multi_backward)
+```
+
+Glucosa a las 2 horas (OR ≈ 1.04; p \< 0.001) y IMC (OR ≈ 1.08; p \< 0.001) mostraron asociaciones positivas y altamente significativas con el riesgo de diabetes.
+
+Historial de diabetes familiar (OR ≈ 3.16; p = 0.0067) se asoció con un aumento sustancial del riesgo.
+
+Edad presentó una tendencia positiva (OR ≈ 1.04; p ≈ 0.053), aunque marginalmente no significativa.
+
+Número de embarazos no mostró asociación estadísticamente significativa tras el ajuste (p = 0.127).
+
+El modelo presentó un AIC de 356.89, indicando un adecuado equilibrio entre ajuste y complejidad.
+
+```{r}
+summary(multi_forward)
+```
+
+El modelo seleccionó las ocho variables originales, sin eliminar ninguna.
+
+Glucosa a las 2 horas (OR = 1.04; p \< 0.001), IMC (OR = 1.07; p = 0.0099) y historial de diabetes familiar (OR = 3.13; p = 0.0076) mostraron asociaciones positivas y significativas.
+
+El resto de las variables (número de embarazos, presión sanguínea, pliegue tricipital, insulina a 2 horas y edad) no alcanzaron significancia estadística tras el ajuste (p \> 0.05).
+
+El AIC de este modelo fue de 362.02, levemente superior al modelo obtenido por backward elimination.
+
+```{r}
+summary(multi_stepwise)
+```
+
+Glucosa a las 2h: Aumento significativo del riesgo (OR ≈ 1.04; p \< 0.001).
+
+IMC: Asociación positiva y significativa (OR ≈ 1.08; p \< 0.001).
+
+Historial de diabetes familiar: Incremento sustancial del riesgo (OR ≈ 3.16; p = 0.0067).
+
+Edad: Tendencia marginal hacia la significancia (OR ≈ 1.04; p ≈ 0.054).
+
+Número de embarazos: No significativo (p = 0.127).
+
+Este modelo presentó un AIC de 356.89, igual al modelo backward, indicando mejor ajuste que el modelo forward.
+
+### **2.6 Conclusión**
+
+Los modelos obtenidos mediante eliminación hacia atrás (*backward elimination*) y selección paso a paso (*stepwise selection*) presentaron el menor valor de AIC (356.89), indicando un mejor ajuste en comparación con el modelo generado mediante selección hacia adelante (*forward selection*) cuyo AIC fue 362.02. Además, ambos modelos seleccionaron el mismo conjunto de variables: glucosa a las 2 horas, índice de masa corporal (IMC), historial de diabetes familiar, edad y número de embarazos. Por el contrario, la técnica de selección hacia adelante mantuvo todas las variables originales, lo que resultó en un modelo más complejo sin mejorar el AIC.
+
+### 2.5 Evaluación de colinealidad
+
+Finalmente, evaluamos la colinealidad usando la función `check_collinearity()` del paquete `performance`.
+
+```{r}
+performance::check_collinearity(multi_backward, ci = NULL)
+```
+
+La evaluación de colinealidad del modelo final mediante el índice de inflación de la varianza (VIF) mostró valores bajos en general:
+
+Los VIF oscilaron entre 1.02 y 1.88, indicando ausencia de colinealidad significativa.
+
+Los mayores VIF se observaron para número de embarazos (1.88) y edad (1.87), pero se mantienen por debajo del umbral comúnmente aceptado de preocupación (VIF \> 5).
+
+Las variables glucosa a 2h, IMC e historial de diabetes familiar presentaron VIF cercanos a 1, lo que refleja independencia entre predictores.
+
+Estos resultados sugieren que el modelo final no presenta problemas relevantes de multicolinealidad.
+
+```{r}
+performance::check_collinearity(multi_forward, ci = NULL)
+```
+
+El análisis de colinealidad mostró lo siguiente
+
+Los VIF oscilaron entre 1.03 y 1.97, lo que indica niveles bajos de colinealidad
+
+El mayor VIF correspondió a edad (1.97) y número de embarazos (1.89), pero aún dentro de rangos aceptables (VIF \< 5)
+
+Variables como IMC (1.83) y glucosa a 2h (1.38) también presentaron niveles bajos de colinealidad.
+
+Todos los valores de Tolerance fueron superiores a 0.5, confirmando la ausencia de multicolinealidad relevante
+
+A pesar de que el modelo frward incluye más variables, no se identificaron problemas de colinealidad significativa que comprometan la estabilidad de las estimaciones
+
+```{r}
+performance::check_collinearity(multi_stepwise, ci = NULL)
+```
+
+Los VIF oscilaron entre 1.02 y 1.88, indicando colinealidad baja.
+
+Los mayores VIF fueron para número de embarazos 1.88 y edad 1.87 pero todos los valores se encuentran ampliamente dentro de los límites aceptables (VIF \< 5).
+
+El resto de las variables (glucosa a 2h, IMC, historial de diabetes) presentaron VIF cercanos a 1, lo que refleja independencia entre predictores.
+
+Los valores de Tolerance fueron también adecuados (\>0.5 en todos los casos).
+
+### **2.6 Conclusión**
+
+Los modelos generados mediante eliminación hacia atrás (backward elimination) y selección paso a paso (stepwise selection) mostraron valores de VIF bajos y cercanos a 1, lo que indica una baja colinealidad entre las variables incluidas.
+
+En cambio, el modelo obtenido con la técnica de selección hacia adelante (forward selection) presentó valores de VIF relativamente más elevados para las variables número de embarazos (VIF = 1.89), IMC (VIF = 1.83) y edad (VIF = 1.97). Sin embargo, estos valores siguen dentro de rangos aceptables y no indican problemas relevantes de colinealidad. Esta diferencia se explica por el mayor número de variables retenidas en el modelo forward, que incluye todos los predictores originales, mientras que los procedimientos de selección automática backward y stepwise optimizaron el modelo reduciendo su complejidad sin comprometer la estabilidad de las estimaciones.
+
+### 2.7 Modelo final
+
+Con base en los resultados de ajuste (AIC) y la evaluación de colinealidad (VIF), se concluye que el modelo óptimo es el obtenido mediante las técnicas de eliminación hacia atrás (backward elimination) o selección paso a paso (stepwise selection), dado que ambos produjeron exactamente el mismo conjunto de variables.
+
+El modelo final incluye un total de cinco variables independientes: número de embarazos, glucosa a las 2 horas, índice de masa corporal (IMC), historial de diabetes familiar y edad, las cuales serán reportadas en el análisis multivariado definitivo.
+
+## 3 Reporte del análisis univariado y multivariado
+
+Como en las sesiones anteriores, reportaremos los resultados del modelo final de regresión logística.
+
+Tabla para los resultados de la regresión univariado (no ajustado)
+
+```{r}
+tabla_univ <- diabetes_data_1 |>
+  tbl_uvregression(
+    include = c(num_embarazos, glucosa_2h, presion_sanguinea, 
+                pliegue_triceps, insulina_2h, imc, historial_diabetes, edad),
+    y = diabetes_5a,
+    method = glm,
+    method.args = list(family = binomial),
+    exponentiate = TRUE,
+    conf.int = TRUE,
+    hide_n = TRUE,
+    add_estimate_to_reference_rows = FALSE,
+    pvalue_fun = ~ style_pvalue(.x, digits = 3),
+    estimate_fun = ~ style_number(.x, digits = 2),
+    label = list(
+      num_embarazos ~ "Número de embarazos",
+      glucosa_2h ~ "Glucosa a las 2h (mg/dL)",
+      presion_sanguinea ~ "Presión sanguínea (mmHg)",
+      pliegue_triceps ~ "Pliegue tricipital (mm)",
+      insulina_2h ~ "Insulina a las 2h (mU/mL)",
+      imc ~ "Índice de masa corporal (IMC)",
+      historial_diabetes ~ "Historial de diabetes familiar",
+      edad ~ "Edad (años)"
+    )
+  ) |>
+  bold_labels() |>
+  bold_p(t = 0.05) |>
+  modify_header(estimate = "**OR**", p.value = "**Valor P**")
+```
+
+Tabla para los resultados de la regresión multivariable (ajustado)
+
+```{r}
+tabla_multi <- glm(
+  diabetes_5a ~ num_embarazos + glucosa_2h + imc + historial_diabetes + edad,
+  family = binomial(link = "logit"),
+  data = diabetes_data_1
+) |>
+  tbl_regression(
+    exponentiate = TRUE,
+    conf.int = TRUE,
+    pvalue_fun = ~ style_pvalue(.x, digits = 3),
+    estimate_fun = ~ style_number(.x, digits = 2),
+    label = list(
+      num_embarazos ~ "Número de embarazos",
+      glucosa_2h ~ "Glucosa a las 2h (mg/dL)",
+      imc ~ "Índice de masa corporal (IMC)",
+      historial_diabetes ~ "Historial de diabetes familiar",
+      edad ~ "Edad (años)"
+    )
+  ) |>
+  bold_labels() |>
+  bold_p(t = 0.05) |>
+  modify_header(estimate = "**OR**", p.value = "**Valor P**")
+```
+
+Tabla para los resultados de la regresión multivariable (ajustado)
+
+```{r}
+tabla_final <- 
+  tbl_merge(
+    list(tabla_univ, tabla_multi),
+    tab_spanner = c("**Univariado**", "**Multivariado**")
+  )
+```
+
+La tabla final la construimos usando la función `tbl_merge()`. De modo que la tabla del análisis univariado o no ajustado y multivariado o ajustado, se muestren lado a lado.
+
+```{r}
+tabla_final
+```
+
+### 3.1 ¿Cómo interpretar?
+
+En el modelo de regresión logística ajustado, la glucosa a las 2 horas, el índice de masa corporal (IMC) y el historial de diabetes familiar se asociaron de manera significativa con el riesgo de desarrollar diabetes a 5 años
+
+Por cada incremento de 1 mg/dL en la glucosa a las 2 horas, las odds de presentar diabetes aumentan en un 4% (OR = 1.04; IC95%: 1.03–1.05; p \< 0.001)
+
+Cada unidad adicional en el IMC eleva las odds en un 8% (OR = 1.08; IC95%: 1.04–1.13; p \< 0.001).
+
+Las personas con mayor carga familiar de diabetes tienen un riesgo más de 3 veces mayor (OR = 3.16; IC95%: 1.40–7.40; p = 0.007)
+
+Por otro lado, el número de embarazos y la edad no mostraron asociación estadísticamente significativa tras el ajuste por las demás variables del modelo (p = 0.127 y p = 0.054, respectivamente)
